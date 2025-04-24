@@ -2,14 +2,15 @@
 
 import rospy
 from duckietown_msgs.msg import Twist2DStamped, WheelEncoderStamped
+from std_msgs.msg import Bool
 
 class ClosedLoopDriver:
     def __init__(self):
         rospy.init_node('closed_loop_square_node', anonymous=True)
 
         # Parameters (Tune these based on your measurements)
-        self.ticks_per_meter = 750     # ticks count for straight 1 meter travel
-        self.ticks_per_90_deg = 50    # ticks count for 90 degree rotation
+        self.ticks_per_meter = 750     # calibration
+        self.ticks_per_90_deg = 50     # calibration
 
         self.left_ticks = 0
         self.right_ticks = 0
@@ -17,11 +18,18 @@ class ClosedLoopDriver:
         self.start_left = 0
         self.start_right = 0
 
+        self.autopilot_enabled = False  # Start with manual control (joystick enabled)
+
         self.cmd = Twist2DStamped()
         self.pub = rospy.Publisher('/yumdoot/car_cmd_switch_node/cmd', Twist2DStamped, queue_size=1)
 
         rospy.Subscriber('/yumdoot/left_wheel_encoder_node/tick', WheelEncoderStamped, self.left_encoder_callback)
         rospy.Subscriber('/yumdoot/right_wheel_encoder_node/tick', WheelEncoderStamped, self.right_encoder_callback)
+        rospy.Subscriber('/yumdoot/joy_mapper_node/joystick_override', Bool, self.autopilot_callback)
+
+    def autopilot_callback(self, msg):
+        self.autopilot_enabled = not msg.data  # joystick_override = False → autopilot enabled
+        rospy.loginfo("Autopilot enabled: %s", self.autopilot_enabled)
 
     def left_encoder_callback(self, msg):
         self.left_ticks = msg.data
@@ -39,6 +47,10 @@ class ClosedLoopDriver:
         self.pub.publish(self.cmd)
 
     def move_straight(self, distance_m, speed):
+        if not self.autopilot_enabled:
+            rospy.logwarn("Autopilot not enabled! Press 'l' on keyboard to enable.")
+            return
+
         target_ticks = abs(distance_m * self.ticks_per_meter)
         direction = 1 if distance_m >= 0 else -1
 
@@ -59,6 +71,10 @@ class ClosedLoopDriver:
         rospy.loginfo("Move completed: %.2f meters", distance_m)
 
     def rotate_in_place(self, angle_deg, angular_speed):
+        if not self.autopilot_enabled:
+            rospy.logwarn("Autopilot not enabled! Press 'l' on keyboard to enable.")
+            return
+
         target_ticks = abs(angle_deg / 90.0 * self.ticks_per_90_deg)
         direction = 1 if angle_deg >= 0 else -1
 
@@ -79,6 +95,10 @@ class ClosedLoopDriver:
         rospy.loginfo("Rotation completed: %.2f degrees", angle_deg)
 
     def drive_square(self, side_length=1.0, linear_speed=0.3, angular_speed=1.0):
+        if not self.autopilot_enabled:
+            rospy.logwarn("Autopilot not enabled! Press 'l' on keyboard to enable.")
+            return
+
         for i in range(4):
             rospy.loginfo("Driving side %d", i+1)
             self.move_straight(side_length, linear_speed)
@@ -88,6 +108,13 @@ class ClosedLoopDriver:
         rospy.loginfo("Completed Closed-Loop Square")
 
     def main_menu(self):
+        # Wait for autopilot to be enabled
+        rospy.loginfo("Waiting for autopilot to be enabled. Press 'l' on keyboard to switch from manual to autopilot...")
+        while not rospy.is_shutdown() and not self.autopilot_enabled:
+            rospy.sleep(1)
+
+        rospy.loginfo("✅ Autopilot enabled! Entering command menu...")
+
         while not rospy.is_shutdown():
             print("\n=== Closed Loop Driver Menu ===")
             print("1. Move Straight (Forward or Backward)")
@@ -137,12 +164,6 @@ class ClosedLoopDriver:
             else:
                 print("Invalid option. Try again.")
 
-if __name__ == '__main__':
-    try:
-        driver = ClosedLoopDriver()
-        rospy.sleep(2)  # wait for encoder values to come in
-        driver.main_menu()
-
-    except rospy.ROSInterruptException:
-        pass
-
+if __
+::contentReference[oaicite:0]{index=0}
+ 
